@@ -78,8 +78,13 @@ export type {
 
   // Model & Schema
   DataFilter,
+  ConformedDimension,
+  RawConformedDimension,
   Model,
   Schema,
+
+  // Utility Types
+  DimensionAttributeInfo,
 } from './types';
 
 // Utilities
@@ -89,5 +94,19 @@ export {
   formatDate,
   formatTimestamp,
   RowData,
-  RawDataRow 
+  RawDataRow,
+  // Dimension path utilities
+  parseDimensionPath,
+  getDimensionLabel,
+  isQualifiedPath,
+  // Conformed dimension utilities
+  isConformed,
+  isConformedQuery,
+  // Virtual dimension utilities
+  isVirtualDimension,
+  // Dimension attribute discovery
+  getAllDimensionAttributes,
 } from './utils';
+
+// Types
+export type { ParsedDimensionPath } from './utils';

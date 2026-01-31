@@ -263,14 +263,17 @@ export interface Source {
  * 
  * Defines a dimension table with its attributes. Referenced by table groups via TableGroupDimension.
  * Dimensions are defined at the model level and shared across table groups within that model.
+ * 
+ * Virtual dimensions (like `_table`) don't have physical tables - they provide
+ * computed metadata values like tableGroup name, model name, etc.
  */
 export interface Dimension {
   /** Dimension identifier */
   name: string;
-  /** Data source configuration (parquet path, etc.) */
-  source: Source;
-  /** Physical table name (schema.table) */
-  table: string;
+  /** Data source configuration (parquet path, etc.) - not present for virtual dimensions */
+  source?: Source;
+  /** Physical table name (schema.table) - not present for virtual dimensions */
+  table?: string;
   /** Table alias for SQL generation */
   alias?: string;
   /** Display label for UIs */
@@ -279,6 +282,8 @@ export interface Dimension {
   description?: string;
   /** Attributes (columns) in this dimension */
   attributes: Attribute[];
+  /** Whether this is a virtual dimension (like _table metadata) */
+  virtual?: boolean;
 }
 
 /**
@@ -320,13 +325,15 @@ export type DimensionRef = TableGroupDimension;
  * Resolved reference to an attribute within a dimension.
  * 
  * Used by utility functions to work with dimension.attribute pairs.
- * Created by parsing strings like "dates.year" into structured references.
+ * Created by parsing strings like "dates.year" or "adwords.campaign.name" into structured references.
  */
 export interface AttributeRef {
   /** The dimension reference (from tableGroup.dimensions) */
   dimension: TableGroupDimension;
   /** The attribute name */
   attribute: string;
+  /** Optional tableGroup qualifier for three-part paths (e.g., "adwords" in "adwords.campaign.name") */
+  tableGroupQualifier?: string;
 }
 
 // =============================================================================
@@ -466,6 +473,44 @@ export interface DataFilter {
 }
 
 /**
+ * Conformed dimension - can be queried across multiple tableGroups.
+ * 
+ * Queries on conformed dimensions automatically UNION across all tableGroups
+ * that have the dimension, enabling cross-source analytics.
+ * 
+ * Supports two forms in YAML:
+ * - Simple: all attributes are conformed (attributes is undefined)
+ * - Detailed: only specific attributes are conformed
+ * 
+ * @example
+ * ```yaml
+ * conformedDimensions:
+ *   - dates                    # All attributes of 'dates' are conformed
+ *   - campaign: [campaign_id]  # Only campaign_id is conformed
+ * ```
+ */
+export interface ConformedDimension {
+  /** Name of the dimension */
+  name: string;
+  /** Specific attributes that are conformed, or undefined if all attributes are conformed */
+  attributes?: string[];
+}
+
+/**
+ * Raw conformed dimension as it appears in YAML-as-JSON.
+ * 
+ * The YAML shorthand formats serialize to JSON differently than the normalized interface:
+ * - `- dates` → `"dates"` (string)
+ * - `- campaign: [id]` → `{ "campaign": ["id"] }` (object with dim name as key)
+ * 
+ * Use the `isConformed()` utility function to check conformity - it handles both formats.
+ */
+export type RawConformedDimension = 
+  | string                              // Simple: "dates" (all attributes conformed)
+  | { [dimName: string]: string[] }     // Detailed: { campaign: ["id"] }
+  | ConformedDimension;                 // Normalized: { name: "dates", attributes?: [...] }
+
+/**
  * Model definition - the queryable business entity.
  * 
  * Contains one or more table groups that share dimension and measure definitions.
@@ -478,6 +523,14 @@ export interface Model {
   namespace?: string;
   /** Shared dimensions (with physical tables) available to table groups in this model */
   dimensions?: Dimension[];
+  /** 
+   * Conformed dimensions - can be queried across multiple tableGroups.
+   * Queries on these dimensions automatically UNION across all feasible tableGroups.
+   * 
+   * Note: Raw YAML-as-JSON may contain strings or shorthand objects. Use the
+   * `isConformed()` utility function to check conformity - it handles all formats.
+   */
+  conformedDimensions?: RawConformedDimension[];
   /** Table groups - each group contains tables that share field definitions */
   tableGroups: TableGroup[];
   /** Metric definitions - derived calculations from measures (model-level, shared across table groups) */
@@ -494,4 +547,47 @@ export interface Model {
 export interface Schema {
   /** Model definitions */
   models: Model[];
+}
+
+// =============================================================================
+// Utility Types
+// =============================================================================
+
+/**
+ * Information about a dimension attribute for UI consumption.
+ * 
+ * Provides all the information a UI needs to display and use dimension attributes,
+ * including whether to use a two-part key (conformed/virtual) or three-part key (qualified).
+ * 
+ * @example
+ * ```typescript
+ * const attrs = getAllDimensionAttributes(model);
+ * 
+ * // Filter to just conformed dimensions
+ * const conformed = attrs.filter(a => a.isConformed);
+ * 
+ * // Filter to just a specific tableGroup
+ * const adwords = attrs.filter(a => a.tableGroup === 'adwords');
+ * 
+ * // Use the key for queries
+ * const request = { dimensions: [attrs[0].key], metrics: ['revenue'] };
+ * ```
+ */
+export interface DimensionAttributeInfo {
+  /** TableGroup name, or null for conformed/virtual dimensions */
+  tableGroup: string | null;
+  /** Dimension name */
+  dimension: string;
+  /** Attribute name */
+  attribute: string;
+  /** 
+   * Query key to use in requests.
+   * - Two-part for conformed/virtual: "dimension.attribute"
+   * - Three-part for qualified: "tableGroup.dimension.attribute"
+   */
+  key: string;
+  /** True if this key produces a cross-tableGroup UNION query */
+  isConformed: boolean;
+  /** True if this is a virtual dimension (like _table) */
+  isVirtual: boolean;
 }

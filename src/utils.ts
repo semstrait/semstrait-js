@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import type { Schema, QueryRequest, Model, TableGroupDimension, Dimension, Attribute, AttributeRef } from './types';
+import type { Schema, QueryRequest, Model, TableGroupDimension, Dimension, Attribute, AttributeRef, ConformedDimension, DimensionAttributeInfo } from './types';
 
 export class RawDataRow {
   [key: string]: string | (null | number);
@@ -138,17 +138,55 @@ export function pivot(
 
 
 function getAttributeRef(dimAtt: string, model: Model): AttributeRef {
-  const [dimName, attName] = dimAtt.split('.');
+  const parts = dimAtt.split('.');
   
-  // Search all table groups for this dimension
-  for (const tableGroup of model.tableGroups) {
+  // Handle three-part path: tableGroup.dimension.attribute
+  if (parts.length === 3) {
+    const [tgName, dimName, attName] = parts;
+    
+    // Find the specific tableGroup
+    const tableGroup = model.tableGroups.find(tg => tg.name === tgName);
+    if (!tableGroup) {
+      throw new Error(`TableGroup '${tgName}' not found`);
+    }
+    
+    // Find the dimension in that tableGroup
     const dimRef = tableGroup.dimensions.find((d: TableGroupDimension) => d.name === dimName);
     if (dimRef) {
-      return { dimension: dimRef, attribute: attName };
+      return { dimension: dimRef, attribute: attName, tableGroupQualifier: tgName };
     }
+    
+    throw new Error(`Dimension '${dimName}' not found in tableGroup '${tgName}'`);
   }
   
-  throw new Error(`Dimension '${dimName}' not found in any table group`);
+  // Handle two-part path: dimension.attribute
+  if (parts.length === 2) {
+    const [dimName, attName] = parts;
+    
+    // Search all table groups for this dimension
+    for (const tableGroup of model.tableGroups) {
+      const dimRef = tableGroup.dimensions.find((d: TableGroupDimension) => d.name === dimName);
+      if (dimRef) {
+        return { dimension: dimRef, attribute: attName };
+      }
+    }
+    
+    // Check model-level dimensions (for virtual dimensions like _table)
+    const modelDim = model.dimensions?.find(d => d.name === dimName);
+    if (modelDim) {
+      // Convert model-level Dimension to TableGroupDimension-compatible object
+      const dimRef: TableGroupDimension = {
+        name: modelDim.name,
+        label: modelDim.label,
+        attributes: modelDim.attributes,
+      };
+      return { dimension: dimRef, attribute: attName };
+    }
+    
+    throw new Error(`Dimension '${dimName}' not found in any table group`);
+  }
+  
+  throw new Error(`Invalid attribute format '${dimAtt}', expected 'dimension.attribute' or 'tableGroup.dimension.attribute'`);
 }
 
 function attributeAlias(dimensions: Dimension[], attributeRef: AttributeRef): string {
@@ -156,6 +194,10 @@ function attributeAlias(dimensions: Dimension[], attributeRef: AttributeRef): st
   if (attributeRef.dimension.attributes) {
     const attribute = attributeRef.dimension.attributes.find(a => a.name === attributeRef.attribute);
     if (attribute) {
+      // Include tableGroup qualifier if present
+      if (attributeRef.tableGroupQualifier) {
+        return `${attributeRef.tableGroupQualifier}.${attributeRef.dimension.name}.${attribute.name}`;
+      }
       return `${attributeRef.dimension.name}.${attribute.name}`;
     }
   }
@@ -169,7 +211,13 @@ function attributeAlias(dimensions: Dimension[], attributeRef: AttributeRef): st
   if (!attribute) {
     throw new Error(`Attribute '${attributeRef.attribute}' not found in dimension '${attributeRef.dimension.name}'`);
   }
-  return `${dimension.alias ?? dimension.name}.${attribute.name}`;
+  
+  // Include tableGroup qualifier if present
+  const dimAlias = dimension.alias ?? dimension.name;
+  if (attributeRef.tableGroupQualifier) {
+    return `${attributeRef.tableGroupQualifier}.${dimAlias}.${attribute.name}`;
+  }
+  return `${dimAlias}.${attribute.name}`;
 }
 
 /**
@@ -287,4 +335,407 @@ export function valueFormat(value: number, format: string): string {
   const valueFormatted = value.toLocaleString('en-US', {minimumFractionDigits:numDec, maximumFractionDigits:numDec})
 
   return prefix + valueFormatted + suffix;
+}
+
+// =============================================================================
+// Dimension Path Utilities
+// =============================================================================
+
+/**
+ * Parsed dimension attribute path
+ * 
+ * Represents a structured view of dimension paths like:
+ * - "dates.year" (two-part, unqualified)
+ * - "adwords.dates.year" (three-part, tableGroup-qualified)
+ */
+export interface ParsedDimensionPath {
+  /** Original path string */
+  raw: string;
+  /** TableGroup qualifier (only for three-part paths) */
+  tableGroup?: string;
+  /** Dimension name */
+  dimension: string;
+  /** Attribute name */
+  attribute: string;
+  /** True if this is a tableGroup-qualified path */
+  isQualified: boolean;
+}
+
+/**
+ * Parse a dimension.attribute path into structured components.
+ * 
+ * Handles both two-part and three-part formats:
+ * - "dates.year" → { dimension: "dates", attribute: "year", isQualified: false }
+ * - "adwords.dates.year" → { tableGroup: "adwords", dimension: "dates", attribute: "year", isQualified: true }
+ * 
+ * @param path - The dimension path string
+ * @returns Parsed path components
+ * @throws Error if path format is invalid
+ * 
+ * @example
+ * ```typescript
+ * const p = parseDimensionPath("dates.year");
+ * // { raw: "dates.year", dimension: "dates", attribute: "year", isQualified: false }
+ * 
+ * const q = parseDimensionPath("adwords.campaign.name");
+ * // { raw: "adwords.campaign.name", tableGroup: "adwords", dimension: "campaign", attribute: "name", isQualified: true }
+ * ```
+ */
+export function parseDimensionPath(path: string): ParsedDimensionPath {
+  const parts = path.split('.');
+  
+  if (parts.length === 3) {
+    return {
+      raw: path,
+      tableGroup: parts[0],
+      dimension: parts[1],
+      attribute: parts[2],
+      isQualified: true,
+    };
+  }
+  
+  if (parts.length === 2) {
+    return {
+      raw: path,
+      dimension: parts[0],
+      attribute: parts[1],
+      isQualified: false,
+    };
+  }
+  
+  throw new Error(`Invalid dimension path '${path}', expected 'dimension.attribute' or 'tableGroup.dimension.attribute'`);
+}
+
+/**
+ * Get a display label for a dimension path.
+ * 
+ * Formats the attribute name as a human-readable label, optionally including
+ * the tableGroup qualifier for three-part paths.
+ * 
+ * @param path - The dimension path string
+ * @param includeQualifier - Whether to include tableGroup in label (default: true)
+ * @returns Human-readable label
+ * 
+ * @example
+ * ```typescript
+ * getDimensionLabel("dates.year");                    // "Year"
+ * getDimensionLabel("adwords.campaign.name");         // "Name (adwords)"
+ * getDimensionLabel("adwords.campaign.name", false);  // "Name"
+ * ```
+ */
+export function getDimensionLabel(path: string, includeQualifier: boolean = true): string {
+  const parsed = parseDimensionPath(path);
+  const attrLabel = parsed.attribute
+    .charAt(0).toUpperCase() + 
+    parsed.attribute.slice(1).replace(/_/g, ' ');
+  
+  if (parsed.isQualified && includeQualifier) {
+    return `${attrLabel} (${parsed.tableGroup})`;
+  }
+  return attrLabel;
+}
+
+/**
+ * Check if a dimension path is tableGroup-qualified (three-part format).
+ * 
+ * @param path - The dimension path string
+ * @returns true if path is three-part (tableGroup.dimension.attribute)
+ */
+export function isQualifiedPath(path: string): boolean {
+  return path.split('.').length === 3;
+}
+
+// =============================================================================
+// Conformed Dimension Utilities
+// =============================================================================
+
+/**
+ * Check if a dimension.attribute is conformed (can be queried across tableGroups).
+ * 
+ * Returns true if:
+ * - The dimension is listed in conformedDimensions with no attribute restrictions, OR
+ * - The dimension is listed with this specific attribute
+ * 
+ * Handles all YAML formats:
+ * - String: `"dates"` (all attributes conformed)
+ * - Shorthand object: `{ campaign: ["id"] }` (specific attributes)
+ * - Normalized object: `{ name: "dates", attributes?: [...] }`
+ * 
+ * @param model - The model to check
+ * @param dimName - The dimension name
+ * @param attrName - The attribute name
+ * @returns true if the dimension.attribute is conformed
+ * 
+ * @example
+ * ```typescript
+ * // Works with any conformedDimensions format:
+ * // - ["dates", { campaign: ["id"] }]  (raw YAML)
+ * // - [{ name: "dates" }, { name: "campaign", attributes: ["id"] }]  (normalized)
+ * isConformed(model, 'dates', 'year');      // true (all dates attrs conformed)
+ * isConformed(model, 'campaign', 'id');     // true (explicitly listed)
+ * isConformed(model, 'campaign', 'name');   // false (not in attributes list)
+ * ```
+ */
+export function isConformed(model: Model, dimName: string, attrName: string): boolean {
+  const conformedList = model.conformedDimensions;
+  if (!conformedList) return false;
+  
+  for (const cd of conformedList) {
+    // Format 1: String - "dates" (all attributes conformed)
+    if (typeof cd === 'string') {
+      if (cd === dimName) return true;
+      continue;
+    }
+    
+    // Format 2: Normalized object - { name: "dates", attributes?: [...] }
+    // Check that 'name' is a string (not an array from shorthand format)
+    if ('name' in cd && typeof cd.name === 'string' && cd.name === dimName) {
+      const normalizedCd = cd as { name: string; attributes?: string[] };
+      if (!normalizedCd.attributes) return true;
+      return normalizedCd.attributes.includes(attrName);
+    }
+    
+    // Format 3: Shorthand object - { campaign: ["id"] }
+    if (dimName in cd) {
+      const attrs = (cd as { [key: string]: string[] })[dimName];
+      if (!attrs || attrs.length === 0) return true;
+      return attrs.includes(attrName);
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Check if a dimension is virtual (like _table metadata).
+ * 
+ * @param model - The model to check
+ * @param dimName - The dimension name
+ * @returns true if the dimension is virtual
+ */
+export function isVirtualDimension(model: Model, dimName: string): boolean {
+  const dimension = model.dimensions?.find(d => d.name === dimName);
+  return dimension?.virtual === true;
+}
+
+/**
+ * Check if all dimension.attribute pairs in a list are conformed.
+ * 
+ * Virtual dimensions (like `_table`) are implicitly conformed - they don't need
+ * to be listed in conformedDimensions.
+ * 
+ * TableGroup-qualified dimensions (e.g., "adwords.campaign.name") are NOT conformed - 
+ * they are explicitly scoped to a single tableGroup.
+ * 
+ * Returns true if:
+ * - All dimensions in the query are virtual (implicitly conformed), OR
+ * - All non-virtual, non-qualified dimensions are explicitly listed in conformedDimensions
+ * 
+ * @param model - The model to check
+ * @param dimensionAttrs - Array of dimension.attribute strings (e.g., ['dates.year', 'campaign.id'])
+ * @returns true if all dimension attributes are conformed (explicitly or implicitly)
+ * 
+ * @example
+ * ```typescript
+ * isConformedQuery(model, ['dates.year', '_table.tableGroup']);  // true if dates is conformed
+ * isConformedQuery(model, ['dates.year', 'product.name']);       // false if product not conformed
+ * isConformedQuery(model, ['_table.tableGroup']);                // true (virtual = implicitly conformed)
+ * isConformedQuery(model, ['adwords.campaign.name']);            // false (tableGroup-qualified)
+ * ```
+ */
+export function isConformedQuery(model: Model, dimensionAttrs: string[]): boolean {
+  // Separate virtual, qualified, and standard physical dimensions
+  const virtualDims: string[] = [];
+  const qualifiedDims: string[] = []; // tableGroup-qualified dimensions
+  const physicalDims: string[] = [];
+  
+  for (const dimAttr of dimensionAttrs) {
+    const parts = dimAttr.split('.');
+    
+    // Three-part path: tableGroup.dimension.attribute (qualified)
+    if (parts.length === 3) {
+      qualifiedDims.push(dimAttr);
+      continue;
+    }
+    
+    // Two-part path: dimension.attribute
+    if (parts.length !== 2) continue;
+    
+    const dimName = parts[0];
+    if (isVirtualDimension(model, dimName)) {
+      virtualDims.push(dimAttr);
+    } else {
+      physicalDims.push(dimAttr);
+    }
+  }
+  
+  // If there are tableGroup-qualified dimensions, the query is NOT conformed
+  // (those dimensions are explicitly scoped to specific tableGroups)
+  // But they CAN coexist with virtual and conformed dimensions in cross-tableGroup queries
+  
+  // If there are only virtual dimensions (and optionally qualified), allow UNION path
+  if (physicalDims.length === 0 && virtualDims.length > 0) {
+    return true;
+  }
+  
+  // If there are physical dimensions, they must all be conformed
+  if (physicalDims.length > 0) {
+    // Need conformedDimensions to be defined
+    if (!model.conformedDimensions || model.conformedDimensions.length === 0) {
+      return false;
+    }
+    
+    // Check all physical dimensions are conformed
+    return physicalDims.every(dimAttr => {
+      const parts = dimAttr.split('.');
+      if (parts.length !== 2) return false;
+      
+      const [dimName, attrName] = parts;
+      return isConformed(model, dimName, attrName);
+    });
+  }
+  
+  // Only qualified dimensions (no virtual or conformed) - not a conformed query
+  // but the planner will handle the UNION with NULLs
+  if (qualifiedDims.length > 0) {
+    return false;
+  }
+  
+  // Empty query - not conformed
+  return false;
+}
+
+// =============================================================================
+// Dimension Attribute Discovery
+// =============================================================================
+
+/**
+ * Get all dimension attributes from a model with metadata for UI consumption.
+ * 
+ * Returns a flat list of all dimension attributes across all tableGroups, plus
+ * entries for conformed and virtual dimensions with `tableGroup: null`.
+ * 
+ * Each entry includes:
+ * - `tableGroup`: which tableGroup this is from, or null for conformed/virtual
+ * - `dimension`: the dimension name
+ * - `attribute`: the attribute name
+ * - `key`: the query key to use (two-part or three-part)
+ * - `isConformed`: whether this key produces a cross-tableGroup query
+ * - `isVirtual`: whether this is a virtual dimension
+ * 
+ * @param model - The model to extract dimension attributes from
+ * @returns Array of dimension attribute info objects
+ * 
+ * @example
+ * ```typescript
+ * const attrs = getAllDimensionAttributes(model);
+ * 
+ * // Show only conformed/virtual (for a simple dimension picker)
+ * const simpleList = attrs.filter(a => a.tableGroup === null);
+ * 
+ * // Show all entries (for advanced users who want tableGroup-specific queries)
+ * const fullList = attrs;
+ * 
+ * // Group by dimension for display
+ * const byDimension = Object.groupBy(attrs, a => a.dimension);
+ * ```
+ */
+export function getAllDimensionAttributes(model: Model): DimensionAttributeInfo[] {
+  const results: DimensionAttributeInfo[] = [];
+  const topLevelDimensions = model.dimensions || [];
+  
+  // Track which (dimension, attribute) pairs we've seen for conformed entries
+  // Map from "dim.attr" -> { added: boolean, isVirtual: boolean }
+  const conformedTracker = new Map<string, { added: boolean; isVirtual: boolean }>();
+  
+  // 1. Process each tableGroup's dimensions
+  for (const tableGroup of model.tableGroups || []) {
+    for (const dimRef of tableGroup.dimensions || []) {
+      // Find top-level dimension definition (for attributes and virtual flag)
+      const topLevelDim = topLevelDimensions.find(d => d.name === dimRef.name);
+      
+      // Get attributes: prefer dimRef.attributes, fallback to top-level
+      const attributes = dimRef.attributes || topLevelDim?.attributes || [];
+      const isVirtual = topLevelDim?.virtual === true;
+      
+      for (const attr of attributes) {
+        // Handle both string attributes and Attribute objects
+        const attrName = typeof attr === 'string' ? attr : attr.name;
+        const attrIsConformed = isConformed(model, dimRef.name, attrName);
+        const conformedKey = `${dimRef.name}.${attrName}`;
+        
+        // Virtual dimensions: only add once (with tableGroup: null)
+        if (isVirtual) {
+          if (!conformedTracker.has(conformedKey)) {
+            conformedTracker.set(conformedKey, { added: true, isVirtual: true });
+            results.push({
+              tableGroup: null,
+              dimension: dimRef.name,
+              attribute: attrName,
+              key: conformedKey,
+              isConformed: true,  // virtual = implicitly conformed
+              isVirtual: true,
+            });
+          }
+          continue;
+        }
+        
+        // Physical dimensions: always add tableGroup-specific entry
+        results.push({
+          tableGroup: tableGroup.name,
+          dimension: dimRef.name,
+          attribute: attrName,
+          key: `${tableGroup.name}.${dimRef.name}.${attrName}`,
+          isConformed: false,
+          isVirtual: false,
+        });
+        
+        // Track conformed attrs for later (if not already added)
+        if (attrIsConformed && !conformedTracker.has(conformedKey)) {
+          conformedTracker.set(conformedKey, { added: false, isVirtual: false });
+        }
+      }
+    }
+  }
+  
+  // 2. Process model-level virtual dimensions that aren't referenced in any tableGroup
+  // (e.g., _table which is defined at model.dimensions but not in tableGroup.dimensions)
+  for (const dim of topLevelDimensions) {
+    if (dim.virtual === true) {
+      for (const attr of dim.attributes || []) {
+        const attrName = typeof attr === 'string' ? attr : attr.name;
+        const conformedKey = `${dim.name}.${attrName}`;
+        
+        // Only add if not already added from tableGroup processing
+        if (!conformedTracker.has(conformedKey)) {
+          conformedTracker.set(conformedKey, { added: true, isVirtual: true });
+          results.push({
+            tableGroup: null,
+            dimension: dim.name,
+            attribute: attrName,
+            key: conformedKey,
+            isConformed: true,  // virtual = implicitly conformed
+            isVirtual: true,
+          });
+        }
+      }
+    }
+  }
+  
+  // 3. Add conformed dimension entries (tableGroup: null) that weren't already added
+  for (const [key, tracker] of conformedTracker) {
+    if (!tracker.added && !tracker.isVirtual) {
+      const [dim, attr] = key.split('.');
+      results.push({
+        tableGroup: null,
+        dimension: dim,
+        attribute: attr,
+        key,
+        isConformed: true,
+        isVirtual: false,
+      });
+    }
+  }
+  
+  return results;
 }
