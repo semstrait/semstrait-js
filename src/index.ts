@@ -78,8 +78,6 @@ export type {
 
   // Model & Schema
   DataFilter,
-  ConformedDimension,
-  RawConformedDimension,
   Model,
   Schema,
 

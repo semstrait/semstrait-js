@@ -473,64 +473,21 @@ export interface DataFilter {
 }
 
 /**
- * Conformed dimension - can be queried across multiple tableGroups.
- * 
- * Queries on conformed dimensions automatically UNION across all tableGroups
- * that have the dimension, enabling cross-source analytics.
- * 
- * Supports two forms in YAML:
- * - Simple: all attributes are conformed (attributes is undefined)
- * - Detailed: only specific attributes are conformed
- * 
- * @example
- * ```yaml
- * conformedDimensions:
- *   - dates                    # All attributes of 'dates' are conformed
- *   - campaign: [campaign_id]  # Only campaign_id is conformed
- * ```
- */
-export interface ConformedDimension {
-  /** Name of the dimension */
-  name: string;
-  /** Specific attributes that are conformed, or undefined if all attributes are conformed */
-  attributes?: string[];
-}
-
-/**
- * Raw conformed dimension as it appears in YAML-as-JSON.
- * 
- * The YAML shorthand formats serialize to JSON differently than the normalized interface:
- * - `- dates` → `"dates"` (string)
- * - `- campaign: [id]` → `{ "campaign": ["id"] }` (object with dim name as key)
- * 
- * Use the `isConformed()` utility function to check conformity - it handles both formats.
- */
-export type RawConformedDimension = 
-  | string                              // Simple: "dates" (all attributes conformed)
-  | { [dimName: string]: string[] }     // Detailed: { campaign: ["id"] }
-  | ConformedDimension;                 // Normalized: { name: "dates", attributes?: [...] }
-
-/**
  * Model definition - the queryable business entity.
  * 
  * Contains one or more table groups that share dimension and measure definitions.
  * The selector picks the optimal table based on query requirements.
+ * 
+ * Model-level dimensions are queryable with 2-part paths (dimension.attribute)
+ * across all tableGroups that reference them.
  */
 export interface Model {
   /** Model identifier */
   name: string;
   /** Namespace for the model (e.g., organization or project identifier) */
   namespace?: string;
-  /** Shared dimensions (with physical tables) available to table groups in this model */
+  /** Model-level dimensions - queryable with 2-part paths across all tableGroups */
   dimensions?: Dimension[];
-  /** 
-   * Conformed dimensions - can be queried across multiple tableGroups.
-   * Queries on these dimensions automatically UNION across all feasible tableGroups.
-   * 
-   * Note: Raw YAML-as-JSON may contain strings or shorthand objects. Use the
-   * `isConformed()` utility function to check conformity - it handles all formats.
-   */
-  conformedDimensions?: RawConformedDimension[];
   /** Table groups - each group contains tables that share field definitions */
   tableGroups: TableGroup[];
   /** Metric definitions - derived calculations from measures (model-level, shared across table groups) */

@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import type { Schema, QueryRequest, Model, TableGroupDimension, Dimension, Attribute, AttributeRef, ConformedDimension, DimensionAttributeInfo } from './types';
+import type { Schema, QueryRequest, Model, TableGroupDimension, Dimension, Attribute, AttributeRef, DimensionAttributeInfo } from './types';
 
 export class RawDataRow {
   [key: string]: string | (null | number);
@@ -450,60 +450,26 @@ export function isQualifiedPath(path: string): boolean {
 // =============================================================================
 
 /**
- * Check if a dimension.attribute is conformed (can be queried across tableGroups).
+ * Check if a dimension is defined at model level (can be queried with 2-part path).
  * 
- * Returns true if:
- * - The dimension is listed in conformedDimensions with no attribute restrictions, OR
- * - The dimension is listed with this specific attribute
- * 
- * Handles all YAML formats:
- * - String: `"dates"` (all attributes conformed)
- * - Shorthand object: `{ campaign: ["id"] }` (specific attributes)
- * - Normalized object: `{ name: "dates", attributes?: [...] }`
+ * Model-level dimensions are queryable across all tableGroups that reference them.
+ * The attrName parameter is kept for API compatibility but is not used in the check.
  * 
  * @param model - The model to check
  * @param dimName - The dimension name
- * @param attrName - The attribute name
- * @returns true if the dimension.attribute is conformed
+ * @param _attrName - The attribute name (kept for API compatibility, not used)
+ * @returns true if the dimension exists at model level
  * 
  * @example
  * ```typescript
- * // Works with any conformedDimensions format:
- * // - ["dates", { campaign: ["id"] }]  (raw YAML)
- * // - [{ name: "dates" }, { name: "campaign", attributes: ["id"] }]  (normalized)
- * isConformed(model, 'dates', 'year');      // true (all dates attrs conformed)
- * isConformed(model, 'campaign', 'id');     // true (explicitly listed)
- * isConformed(model, 'campaign', 'name');   // false (not in attributes list)
+ * isConformed(model, 'dates', 'year');    // true if dates is in model.dimensions
+ * isConformed(model, 'campaign', 'id');   // true if campaign is in model.dimensions
+ * isConformed(model, '_table', 'name');   // true (_table is model-level virtual)
  * ```
  */
-export function isConformed(model: Model, dimName: string, attrName: string): boolean {
-  const conformedList = model.conformedDimensions;
-  if (!conformedList) return false;
-  
-  for (const cd of conformedList) {
-    // Format 1: String - "dates" (all attributes conformed)
-    if (typeof cd === 'string') {
-      if (cd === dimName) return true;
-      continue;
-    }
-    
-    // Format 2: Normalized object - { name: "dates", attributes?: [...] }
-    // Check that 'name' is a string (not an array from shorthand format)
-    if ('name' in cd && typeof cd.name === 'string' && cd.name === dimName) {
-      const normalizedCd = cd as { name: string; attributes?: string[] };
-      if (!normalizedCd.attributes) return true;
-      return normalizedCd.attributes.includes(attrName);
-    }
-    
-    // Format 3: Shorthand object - { campaign: ["id"] }
-    if (dimName in cd) {
-      const attrs = (cd as { [key: string]: string[] })[dimName];
-      if (!attrs || attrs.length === 0) return true;
-      return attrs.includes(attrName);
-    }
-  }
-  
-  return false;
+export function isConformed(model: Model, dimName: string, _attrName: string): boolean {
+  const modelDimensions = model.dimensions || [];
+  return modelDimensions.some(d => d.name === dimName);
 }
 
 /**
@@ -519,90 +485,49 @@ export function isVirtualDimension(model: Model, dimName: string): boolean {
 }
 
 /**
- * Check if all dimension.attribute pairs in a list are conformed.
+ * Check if all dimension.attribute pairs in a list can use the cross-tableGroup UNION path.
  * 
- * Virtual dimensions (like `_table`) are implicitly conformed - they don't need
- * to be listed in conformedDimensions.
+ * Returns true if all dimensions are either:
+ * - Virtual dimensions (like `_table`) - implicitly work across tableGroups
+ * - Model-level dimensions - defined at model.dimensions, queryable with 2-part paths
  * 
  * TableGroup-qualified dimensions (e.g., "adwords.campaign.name") are NOT conformed - 
  * they are explicitly scoped to a single tableGroup.
  * 
- * Returns true if:
- * - All dimensions in the query are virtual (implicitly conformed), OR
- * - All non-virtual, non-qualified dimensions are explicitly listed in conformedDimensions
- * 
  * @param model - The model to check
  * @param dimensionAttrs - Array of dimension.attribute strings (e.g., ['dates.year', 'campaign.id'])
- * @returns true if all dimension attributes are conformed (explicitly or implicitly)
+ * @returns true if all dimension attributes can use the cross-tableGroup path
  * 
  * @example
  * ```typescript
- * isConformedQuery(model, ['dates.year', '_table.tableGroup']);  // true if dates is conformed
- * isConformedQuery(model, ['dates.year', 'product.name']);       // false if product not conformed
- * isConformedQuery(model, ['_table.tableGroup']);                // true (virtual = implicitly conformed)
+ * isConformedQuery(model, ['dates.year', '_table.tableGroup']);  // true if dates is model-level
+ * isConformedQuery(model, ['dates.year', 'product.name']);       // false if product not model-level
+ * isConformedQuery(model, ['_table.tableGroup']);                // true (virtual)
  * isConformedQuery(model, ['adwords.campaign.name']);            // false (tableGroup-qualified)
  * ```
  */
 export function isConformedQuery(model: Model, dimensionAttrs: string[]): boolean {
-  // Separate virtual, qualified, and standard physical dimensions
-  const virtualDims: string[] = [];
-  const qualifiedDims: string[] = []; // tableGroup-qualified dimensions
-  const physicalDims: string[] = [];
-  
-  for (const dimAttr of dimensionAttrs) {
-    const parts = dimAttr.split('.');
-    
-    // Three-part path: tableGroup.dimension.attribute (qualified)
-    if (parts.length === 3) {
-      qualifiedDims.push(dimAttr);
-      continue;
-    }
-    
-    // Two-part path: dimension.attribute
-    if (parts.length !== 2) continue;
-    
-    const dimName = parts[0];
-    if (isVirtualDimension(model, dimName)) {
-      virtualDims.push(dimAttr);
-    } else {
-      physicalDims.push(dimAttr);
-    }
-  }
-  
-  // If there are tableGroup-qualified dimensions, the query is NOT conformed
-  // (those dimensions are explicitly scoped to specific tableGroups)
-  // But they CAN coexist with virtual and conformed dimensions in cross-tableGroup queries
-  
-  // If there are only virtual dimensions (and optionally qualified), allow UNION path
-  if (physicalDims.length === 0 && virtualDims.length > 0) {
-    return true;
-  }
-  
-  // If there are physical dimensions, they must all be conformed
-  if (physicalDims.length > 0) {
-    // Need conformedDimensions to be defined
-    if (!model.conformedDimensions || model.conformedDimensions.length === 0) {
-      return false;
-    }
-    
-    // Check all physical dimensions are conformed
-    return physicalDims.every(dimAttr => {
-      const parts = dimAttr.split('.');
-      if (parts.length !== 2) return false;
-      
-      const [dimName, attrName] = parts;
-      return isConformed(model, dimName, attrName);
-    });
-  }
-  
-  // Only qualified dimensions (no virtual or conformed) - not a conformed query
-  // but the planner will handle the UNION with NULLs
-  if (qualifiedDims.length > 0) {
+  if (dimensionAttrs.length === 0) {
     return false;
   }
   
-  // Empty query - not conformed
-  return false;
+  return dimensionAttrs.every(dimAttr => {
+    const parts = dimAttr.split('.');
+    
+    // Three-part path: tableGroup.dimension.attribute (qualified) - NOT conformed
+    if (parts.length === 3) {
+      return false;
+    }
+    
+    // Two-part path: dimension.attribute
+    if (parts.length !== 2) {
+      return false;
+    }
+    
+    const dimName = parts[0];
+    // Check if dimension exists at model level (includes virtual dimensions)
+    return isConformed(model, dimName, parts[1]);
+  });
 }
 
 // =============================================================================
