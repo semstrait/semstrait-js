@@ -7,22 +7,22 @@
  *
  * @example
  * ```typescript
- * import type { Schema, SemanticModel, TableGroup, Measure } from 'semstrait';
+ * import type { Schema, SemanticModel, DatasetGroup, Measure } from 'semstrait';
  *
  * // Fetch schema from your API
  * const schema: Schema = await fetch('/api/schema').then(r => r.json());
  *
  * // Navigate the semantic model structure
  * const model = schema.semantic_models[0];
- * const tableGroup = model.tableGroups[0];
+ * const datasetGroup = model.datasetGroups[0];
  *
- * // Access measures from table groups
- * const revenue = tableGroup.measures.find(m => m.name === 'revenue');
+ * // Access measures from dataset groups
+ * const revenue = datasetGroup.measures.find(m => m.name === 'revenue');
  * console.log(revenue?.description);  // "Total revenue from completed orders"
  * console.log(revenue?.synonyms);     // ["sales", "total sales", "income"]
  *
- * // Access dimensions from table groups
- * const dateDim = tableGroup.dimensions.find(d => d.name === 'dates');
+ * // Access dimensions from dataset groups
+ * const dateDim = datasetGroup.dimensions.find(d => d.name === 'dates');
  * console.log(dateDim?.join?.leftKey); // "time_id"
  * ```
  *
@@ -62,8 +62,7 @@ export type {
   Attribute,
   Dimension,
   Join,
-  TableGroupDimension,
-  DimensionRef,  // Deprecated alias for TableGroupDimension
+  DatasetGroupDimension,
   AttributeRef,
 
   // Measures & Metrics
@@ -71,9 +70,9 @@ export type {
   Measure,
   Metric,
 
-  // Table Groups
-  TableGroup,
-  GroupTable,
+  // Dataset Groups
+  DatasetGroup,
+  GroupDataset,
   Column,
 
   // SemanticModel & Schema

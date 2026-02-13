@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import type { Schema, QueryRequest, SemanticModel, TableGroupDimension, Dimension, Attribute, AttributeRef, DimensionAttributeInfo } from './types';
+import type { Schema, QueryRequest, SemanticModel, DatasetGroupDimension, Dimension, Attribute, AttributeRef, DimensionAttributeInfo } from './types';
 
 export class RawDataRow {
   [key: string]: string | (null | number);
@@ -140,32 +140,32 @@ export function pivot(
 function getAttributeRef(dimAtt: string, model: SemanticModel): AttributeRef {
   const parts = dimAtt.split('.');
   
-  // Handle three-part path: tableGroup.dimension.attribute
+  // Handle three-part path: datasetGroup.dimension.attribute
   if (parts.length === 3) {
-    const [tgName, dimName, attName] = parts;
+    const [dgName, dimName, attName] = parts;
     
-    // Find the specific tableGroup
-    const tableGroup = model.tableGroups.find(tg => tg.name === tgName);
-    if (!tableGroup) {
-      throw new Error(`TableGroup '${tgName}' not found`);
+    // Find the specific datasetGroup
+    const datasetGroup = model.datasetGroups.find(dg => dg.name === dgName);
+    if (!datasetGroup) {
+      throw new Error(`DatasetGroup '${dgName}' not found`);
     }
     
-    // Find the dimension in that tableGroup
-    const dimRef = tableGroup.dimensions.find((d: TableGroupDimension) => d.name === dimName);
+    // Find the dimension in that datasetGroup
+    const dimRef = datasetGroup.dimensions.find((d: DatasetGroupDimension) => d.name === dimName);
     if (dimRef) {
-      return { dimension: dimRef, attribute: attName, tableGroupQualifier: tgName };
+      return { dimension: dimRef, attribute: attName, datasetGroupQualifier: dgName };
     }
     
-    throw new Error(`Dimension '${dimName}' not found in tableGroup '${tgName}'`);
+    throw new Error(`Dimension '${dimName}' not found in datasetGroup '${dgName}'`);
   }
   
   // Handle two-part path: dimension.attribute
   if (parts.length === 2) {
     const [dimName, attName] = parts;
     
-    // Search all table groups for this dimension
-    for (const tableGroup of model.tableGroups) {
-      const dimRef = tableGroup.dimensions.find((d: TableGroupDimension) => d.name === dimName);
+    // Search all dataset groups for this dimension
+    for (const datasetGroup of model.datasetGroups) {
+      const dimRef = datasetGroup.dimensions.find((d: DatasetGroupDimension) => d.name === dimName);
       if (dimRef) {
         return { dimension: dimRef, attribute: attName };
       }
@@ -174,8 +174,8 @@ function getAttributeRef(dimAtt: string, model: SemanticModel): AttributeRef {
     // Check model-level dimensions (for virtual dimensions like _table)
     const modelDim = model.dimensions?.find(d => d.name === dimName);
     if (modelDim) {
-      // Convert model-level Dimension to TableGroupDimension-compatible object
-      const dimRef: TableGroupDimension = {
+      // Convert model-level Dimension to DatasetGroupDimension-compatible object
+      const dimRef: DatasetGroupDimension = {
         name: modelDim.name,
         label: modelDim.label,
         attributes: modelDim.attributes,
@@ -183,10 +183,10 @@ function getAttributeRef(dimAtt: string, model: SemanticModel): AttributeRef {
       return { dimension: dimRef, attribute: attName };
     }
     
-    throw new Error(`Dimension '${dimName}' not found in any table group`);
+    throw new Error(`Dimension '${dimName}' not found in any dataset group`);
   }
   
-  throw new Error(`Invalid attribute format '${dimAtt}', expected 'dimension.attribute' or 'tableGroup.dimension.attribute'`);
+  throw new Error(`Invalid attribute format '${dimAtt}', expected 'dimension.attribute' or 'datasetGroup.dimension.attribute'`);
 }
 
 function attributeAlias(dimensions: Dimension[], attributeRef: AttributeRef): string {
@@ -194,9 +194,9 @@ function attributeAlias(dimensions: Dimension[], attributeRef: AttributeRef): st
   if (attributeRef.dimension.attributes) {
     const attribute = attributeRef.dimension.attributes.find(a => a.name === attributeRef.attribute);
     if (attribute) {
-      // Include tableGroup qualifier if present
-      if (attributeRef.tableGroupQualifier) {
-        return `${attributeRef.tableGroupQualifier}.${attributeRef.dimension.name}.${attribute.name}`;
+      // Include datasetGroup qualifier if present
+      if (attributeRef.datasetGroupQualifier) {
+        return `${attributeRef.datasetGroupQualifier}.${attributeRef.dimension.name}.${attribute.name}`;
       }
       return `${attributeRef.dimension.name}.${attribute.name}`;
     }
@@ -212,10 +212,10 @@ function attributeAlias(dimensions: Dimension[], attributeRef: AttributeRef): st
     throw new Error(`Attribute '${attributeRef.attribute}' not found in dimension '${attributeRef.dimension.name}'`);
   }
   
-  // Include tableGroup qualifier if present
+  // Include datasetGroup qualifier if present
   const dimAlias = dimension.alias ?? dimension.name;
-  if (attributeRef.tableGroupQualifier) {
-    return `${attributeRef.tableGroupQualifier}.${dimAlias}.${attribute.name}`;
+  if (attributeRef.datasetGroupQualifier) {
+    return `${attributeRef.datasetGroupQualifier}.${dimAlias}.${attribute.name}`;
   }
   return `${dimAlias}.${attribute.name}`;
 }
@@ -346,18 +346,18 @@ export function valueFormat(value: number, format: string): string {
  * 
  * Represents a structured view of dimension paths like:
  * - "dates.year" (two-part, unqualified)
- * - "adwords.dates.year" (three-part, tableGroup-qualified)
+ * - "adwords.dates.year" (three-part, datasetGroup-qualified)
  */
 export interface ParsedDimensionPath {
   /** Original path string */
   raw: string;
-  /** TableGroup qualifier (only for three-part paths) */
-  tableGroup?: string;
+  /** DatasetGroup qualifier (only for three-part paths) */
+  datasetGroup?: string;
   /** Dimension name */
   dimension: string;
   /** Attribute name */
   attribute: string;
-  /** True if this is a tableGroup-qualified path */
+  /** True if this is a datasetGroup-qualified path */
   isQualified: boolean;
 }
 
@@ -366,7 +366,7 @@ export interface ParsedDimensionPath {
  * 
  * Handles both two-part and three-part formats:
  * - "dates.year" → { dimension: "dates", attribute: "year", isQualified: false }
- * - "adwords.dates.year" → { tableGroup: "adwords", dimension: "dates", attribute: "year", isQualified: true }
+ * - "adwords.dates.year" → { datasetGroup: "adwords", dimension: "dates", attribute: "year", isQualified: true }
  * 
  * @param path - The dimension path string
  * @returns Parsed path components
@@ -378,7 +378,7 @@ export interface ParsedDimensionPath {
  * // { raw: "dates.year", dimension: "dates", attribute: "year", isQualified: false }
  * 
  * const q = parseDimensionPath("adwords.campaign.name");
- * // { raw: "adwords.campaign.name", tableGroup: "adwords", dimension: "campaign", attribute: "name", isQualified: true }
+ * // { raw: "adwords.campaign.name", datasetGroup: "adwords", dimension: "campaign", attribute: "name", isQualified: true }
  * ```
  */
 export function parseDimensionPath(path: string): ParsedDimensionPath {
@@ -387,7 +387,7 @@ export function parseDimensionPath(path: string): ParsedDimensionPath {
   if (parts.length === 3) {
     return {
       raw: path,
-      tableGroup: parts[0],
+      datasetGroup: parts[0],
       dimension: parts[1],
       attribute: parts[2],
       isQualified: true,
@@ -403,17 +403,17 @@ export function parseDimensionPath(path: string): ParsedDimensionPath {
     };
   }
   
-  throw new Error(`Invalid dimension path '${path}', expected 'dimension.attribute' or 'tableGroup.dimension.attribute'`);
+  throw new Error(`Invalid dimension path '${path}', expected 'dimension.attribute' or 'datasetGroup.dimension.attribute'`);
 }
 
 /**
  * Get a display label for a dimension path.
  * 
  * Formats the attribute name as a human-readable label, optionally including
- * the tableGroup qualifier for three-part paths.
+ * the datasetGroup qualifier for three-part paths.
  * 
  * @param path - The dimension path string
- * @param includeQualifier - Whether to include tableGroup in label (default: true)
+ * @param includeQualifier - Whether to include datasetGroup in label (default: true)
  * @returns Human-readable label
  * 
  * @example
@@ -430,16 +430,16 @@ export function getDimensionLabel(path: string, includeQualifier: boolean = true
     parsed.attribute.slice(1).replace(/_/g, ' ');
   
   if (parsed.isQualified && includeQualifier) {
-    return `${attrLabel} (${parsed.tableGroup})`;
+    return `${attrLabel} (${parsed.datasetGroup})`;
   }
   return attrLabel;
 }
 
 /**
- * Check if a dimension path is tableGroup-qualified (three-part format).
+ * Check if a dimension path is datasetGroup-qualified (three-part format).
  * 
  * @param path - The dimension path string
- * @returns true if path is three-part (tableGroup.dimension.attribute)
+ * @returns true if path is three-part (datasetGroup.dimension.attribute)
  */
 export function isQualifiedPath(path: string): boolean {
   return path.split('.').length === 3;
@@ -452,7 +452,7 @@ export function isQualifiedPath(path: string): boolean {
 /**
  * Check if a dimension is defined at model level (can be queried with 2-part path).
  * 
- * Model-level dimensions are queryable across all tableGroups that reference them.
+ * Model-level dimensions are queryable across all datasetGroups that reference them.
  * The attrName parameter is kept for API compatibility but is not used in the check.
  * 
  * @param model - The model to check
@@ -485,25 +485,25 @@ export function isVirtualDimension(model: SemanticModel, dimName: string): boole
 }
 
 /**
- * Check if all dimension.attribute pairs in a list can use the cross-tableGroup UNION path.
+ * Check if all dimension.attribute pairs in a list can use the cross-datasetGroup UNION path.
  * 
  * Returns true if all dimensions are either:
- * - Virtual dimensions (like `_table`) - implicitly work across tableGroups
+ * - Virtual dimensions (like `_table`) - implicitly work across datasetGroups
  * - Model-level dimensions - defined at model.dimensions, queryable with 2-part paths
  * 
- * TableGroup-qualified dimensions (e.g., "adwords.campaign.name") are NOT conformed - 
- * they are explicitly scoped to a single tableGroup.
+ * DatasetGroup-qualified dimensions (e.g., "adwords.campaign.name") are NOT conformed - 
+ * they are explicitly scoped to a single datasetGroup.
  * 
  * @param model - The model to check
  * @param dimensionAttrs - Array of dimension.attribute strings (e.g., ['dates.year', 'campaign.id'])
- * @returns true if all dimension attributes can use the cross-tableGroup path
+ * @returns true if all dimension attributes can use the cross-datasetGroup path
  * 
  * @example
  * ```typescript
- * isConformedQuery(model, ['dates.year', '_table.tableGroup']);  // true if dates is model-level
- * isConformedQuery(model, ['dates.year', 'product.name']);       // false if product not model-level
- * isConformedQuery(model, ['_table.tableGroup']);                // true (virtual)
- * isConformedQuery(model, ['adwords.campaign.name']);            // false (tableGroup-qualified)
+ * isConformedQuery(model, ['dates.year', '_table.datasetGroup']);  // true if dates is model-level
+ * isConformedQuery(model, ['dates.year', 'product.name']);         // false if product not model-level
+ * isConformedQuery(model, ['_table.datasetGroup']);                // true (virtual)
+ * isConformedQuery(model, ['adwords.campaign.name']);              // false (datasetGroup-qualified)
  * ```
  */
 export function isConformedQuery(model: SemanticModel, dimensionAttrs: string[]): boolean {
@@ -514,7 +514,7 @@ export function isConformedQuery(model: SemanticModel, dimensionAttrs: string[])
   return dimensionAttrs.every(dimAttr => {
     const parts = dimAttr.split('.');
     
-    // Three-part path: tableGroup.dimension.attribute (qualified) - NOT conformed
+    // Three-part path: datasetGroup.dimension.attribute (qualified) - NOT conformed
     if (parts.length === 3) {
       return false;
     }
@@ -537,15 +537,15 @@ export function isConformedQuery(model: SemanticModel, dimensionAttrs: string[])
 /**
  * Get all dimension attributes from a model with metadata for UI consumption.
  * 
- * Returns a flat list of all dimension attributes across all tableGroups, plus
- * entries for conformed and virtual dimensions with `tableGroup: null`.
+ * Returns a flat list of all dimension attributes across all datasetGroups, plus
+ * entries for conformed and virtual dimensions with `datasetGroup: null`.
  * 
  * Each entry includes:
- * - `tableGroup`: which tableGroup this is from, or null for conformed/virtual
+ * - `datasetGroup`: which datasetGroup this is from, or null for conformed/virtual
  * - `dimension`: the dimension name
  * - `attribute`: the attribute name
  * - `key`: the query key to use (two-part or three-part)
- * - `isConformed`: whether this key produces a cross-tableGroup query
+ * - `isConformed`: whether this key produces a cross-datasetGroup query
  * - `isVirtual`: whether this is a virtual dimension
  * 
  * @param model - The model to extract dimension attributes from
@@ -556,9 +556,9 @@ export function isConformedQuery(model: SemanticModel, dimensionAttrs: string[])
  * const attrs = getAllDimensionAttributes(model);
  * 
  * // Show only conformed/virtual (for a simple dimension picker)
- * const simpleList = attrs.filter(a => a.tableGroup === null);
+ * const simpleList = attrs.filter(a => a.datasetGroup === null);
  * 
- * // Show all entries (for advanced users who want tableGroup-specific queries)
+ * // Show all entries (for advanced users who want datasetGroup-specific queries)
  * const fullList = attrs;
  * 
  * // Group by dimension for display
@@ -573,9 +573,9 @@ export function getAllDimensionAttributes(model: SemanticModel): DimensionAttrib
   // Map from "dim.attr" -> { added: boolean, isVirtual: boolean }
   const conformedTracker = new Map<string, { added: boolean; isVirtual: boolean }>();
   
-  // 1. Process each tableGroup's dimensions
-  for (const tableGroup of model.tableGroups || []) {
-    for (const dimRef of tableGroup.dimensions || []) {
+  // 1. Process each datasetGroup's dimensions
+  for (const datasetGroup of model.datasetGroups || []) {
+    for (const dimRef of datasetGroup.dimensions || []) {
       // Find top-level dimension definition (for attributes and virtual flag)
       const topLevelDim = topLevelDimensions.find(d => d.name === dimRef.name);
       
@@ -589,12 +589,12 @@ export function getAllDimensionAttributes(model: SemanticModel): DimensionAttrib
         const attrIsConformed = isConformed(model, dimRef.name, attrName);
         const conformedKey = `${dimRef.name}.${attrName}`;
         
-        // Virtual dimensions: only add once (with tableGroup: null)
+        // Virtual dimensions: only add once (with datasetGroup: null)
         if (isVirtual) {
           if (!conformedTracker.has(conformedKey)) {
             conformedTracker.set(conformedKey, { added: true, isVirtual: true });
             results.push({
-              tableGroup: null,
+              datasetGroup: null,
               dimension: dimRef.name,
               attribute: attrName,
               key: conformedKey,
@@ -605,12 +605,12 @@ export function getAllDimensionAttributes(model: SemanticModel): DimensionAttrib
           continue;
         }
         
-        // Physical dimensions: always add tableGroup-specific entry
+        // Physical dimensions: always add datasetGroup-specific entry
         results.push({
-          tableGroup: tableGroup.name,
+          datasetGroup: datasetGroup.name,
           dimension: dimRef.name,
           attribute: attrName,
-          key: `${tableGroup.name}.${dimRef.name}.${attrName}`,
+          key: `${datasetGroup.name}.${dimRef.name}.${attrName}`,
           isConformed: false,
           isVirtual: false,
         });
@@ -623,19 +623,19 @@ export function getAllDimensionAttributes(model: SemanticModel): DimensionAttrib
     }
   }
   
-  // 2. Process model-level virtual dimensions that aren't referenced in any tableGroup
-  // (e.g., _table which is defined at model.dimensions but not in tableGroup.dimensions)
+  // 2. Process model-level virtual dimensions that aren't referenced in any datasetGroup
+  // (e.g., _table which is defined at model.dimensions but not in datasetGroup.dimensions)
   for (const dim of topLevelDimensions) {
     if (dim.virtual === true) {
       for (const attr of dim.attributes || []) {
         const attrName = typeof attr === 'string' ? attr : attr.name;
         const conformedKey = `${dim.name}.${attrName}`;
         
-        // Only add if not already added from tableGroup processing
+        // Only add if not already added from datasetGroup processing
         if (!conformedTracker.has(conformedKey)) {
           conformedTracker.set(conformedKey, { added: true, isVirtual: true });
           results.push({
-            tableGroup: null,
+            datasetGroup: null,
             dimension: dim.name,
             attribute: attrName,
             key: conformedKey,
@@ -647,12 +647,12 @@ export function getAllDimensionAttributes(model: SemanticModel): DimensionAttrib
     }
   }
   
-  // 3. Add conformed dimension entries (tableGroup: null) that weren't already added
+  // 3. Add conformed dimension entries (datasetGroup: null) that weren't already added
   for (const [key, tracker] of conformedTracker) {
     if (!tracker.added && !tracker.isVirtual) {
       const [dim, attr] = key.split('.');
       results.push({
-        tableGroup: null,
+        datasetGroup: null,
         dimension: dim,
         attribute: attr,
         key,

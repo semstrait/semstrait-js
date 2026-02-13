@@ -15,7 +15,7 @@ TypeScript types and utilities for working with semstrait semantic models. It is
 ## Scope
 
 semstrait-js handles:
-- Type definitions (Schema, Model, TableGroup, QueryRequest, etc.)
+- Type definitions (Schema, Model, DatasetGroup, QueryRequest, etc.)
 - Data transformation (pivot, formatting)
 - Arrow IPC parsing (optional module)
 
@@ -38,13 +38,13 @@ semstrait sits between raw data and the UI. It doesn't fetch data — the applic
 The type system mirrors the Rust semstrait crate:
 
 - **Schema** — Root container with semantic_models and dimension definitions
-- **SemanticModel** — Queryable business entity with tableGroups and metrics
-- **TableGroup** — Group of tables sharing dimension/measure definitions (aggregate awareness)
-- **GroupTable** — Physical table declaring which subset of fields it has
-- **TableGroupDimension** — Dimension reference within a table group (joined or degenerate)
+- **SemanticModel** — Queryable business entity with datasetGroups and metrics
+- **DatasetGroup** — Group of datasets sharing dimension/measure definitions (aggregate awareness)
+- **GroupDataset** — Physical dataset declaring which subset of fields it has
+- **DatasetGroupDimension** — Dimension reference within a dataset group (joined or degenerate)
 - **Dimension** — Top-level dimension table definition
 - **Measure** — Aggregated value with expression and aggregation function
-- **Metric** — Derived calculation from measures (can span table groups)
+- **Metric** — Derived calculation from measures (can span dataset groups)
 
 ## Package Structure
 

@@ -179,13 +179,13 @@ export interface MetricExprNode {
   subtract?: MetricExprArg[];
   multiply?: MetricExprArg[];
   divide?: MetricExprArg[];
-  /** CASE WHEN expression - for cross-tableGroup metrics */
+  /** CASE WHEN expression - for cross-datasetGroup metrics */
   case?: MetricCaseExpr;
 }
 
 /**
  * CASE WHEN expression for metrics.
- * Used for cross-tableGroup metrics that select different measures based on tableGroup.
+ * Used for cross-datasetGroup metrics that select different measures based on datasetGroup.
  */
 export interface MetricCaseExpr {
   /** List of WHEN...THEN branches */
@@ -206,7 +206,7 @@ export interface MetricCaseWhen {
 
 /**
  * Condition expression for metric CASE WHEN.
- * Currently supports tableGroup.name comparisons for cross-tableGroup metrics.
+ * Currently supports datasetGroup.name comparisons for cross-datasetGroup metrics.
  */
 export interface MetricCondition {
   /** Equal: eq: [a, b] */
@@ -217,7 +217,7 @@ export interface MetricCondition {
 
 /**
  * Argument in a metric condition.
- * Can be a string (e.g., "tableGroup.name" or a table group name) or a number.
+ * Can be a string (e.g., "datasetGroup.name" or a dataset group name) or a number.
  */
 export type MetricConditionArg = string | number;
 
@@ -249,7 +249,7 @@ export interface Attribute {
 }
 
 /**
- * Data source configuration for a table or dimension.
+ * Data source configuration for a dataset or dimension.
  */
 export interface Source {
   /** Source type (currently only 'parquet' is supported) */
@@ -261,11 +261,11 @@ export interface Source {
 /**
  * Dimension definition with its physical table and attributes.
  * 
- * Defines a dimension table with its attributes. Referenced by table groups via TableGroupDimension.
- * Dimensions are defined at the model level and shared across table groups within that model.
+ * Defines a dimension table with its attributes. Referenced by dataset groups via DatasetGroupDimension.
+ * Dimensions are defined at the model level and shared across dataset groups within that model.
  * 
  * Virtual dimensions (like `_table`) don't have physical tables - they provide
- * computed metadata values like tableGroup name, model name, etc.
+ * computed metadata values like datasetGroup name, model name, etc.
  */
 export interface Dimension {
   /** Dimension identifier */
@@ -299,13 +299,13 @@ export interface Join {
 }
 
 /**
- * Dimension reference within a table group.
+ * Dimension reference within a dataset group.
  * 
  * Can be either:
  * - Reference to a top-level dimension (has join)
  * - Degenerate dimension (no join, has inline attributes on fact table)
  */
-export interface TableGroupDimension {
+export interface DatasetGroupDimension {
   /** Name of the dimension (must match top-level dimension if using join) */
   name: string;
   /** Display label for UIs */
@@ -317,23 +317,18 @@ export interface TableGroupDimension {
 }
 
 /**
- * @deprecated Use TableGroupDimension instead. Kept for backward compatibility.
- */
-export type DimensionRef = TableGroupDimension;
-
-/**
  * Resolved reference to an attribute within a dimension.
  * 
  * Used by utility functions to work with dimension.attribute pairs.
  * Created by parsing strings like "dates.year" or "adwords.campaign.name" into structured references.
  */
 export interface AttributeRef {
-  /** The dimension reference (from tableGroup.dimensions) */
-  dimension: TableGroupDimension;
+  /** The dimension reference (from datasetGroup.dimensions) */
+  dimension: DatasetGroupDimension;
   /** The attribute name */
   attribute: string;
-  /** Optional tableGroup qualifier for three-part paths (e.g., "adwords" in "adwords.campaign.name") */
-  tableGroupQualifier?: string;
+  /** Optional datasetGroup qualifier for three-part paths (e.g., "adwords" in "adwords.campaign.name") */
+  datasetGroupQualifier?: string;
 }
 
 // =============================================================================
@@ -399,11 +394,11 @@ export interface Metric {
 }
 
 // =============================================================================
-// Table Groups
+// Dataset Groups
 // =============================================================================
 
 /**
- * Column definition in a table.
+ * Column definition in a dataset.
  */
 export interface Column {
   /** Column name */
@@ -413,47 +408,47 @@ export interface Column {
 }
 
 /**
- * A table group - tables sharing dimension and measure definitions.
+ * A dataset group - datasets sharing dimension and measure definitions.
  * 
- * Enables aggregate awareness: multiple tables with different granularities
+ * Enables aggregate awareness: multiple datasets with different granularities
  * can share the same dimension and measure definitions.
  */
-export interface TableGroup {
-  /** Table group identifier */
+export interface DatasetGroup {
+  /** Dataset group identifier */
   name: string;
-  /** Dimensions available to tables in this group */
-  dimensions: TableGroupDimension[];
-  /** Measures shared by all tables in this group */
+  /** Dimensions available to datasets in this group */
+  dimensions: DatasetGroupDimension[];
+  /** Measures shared by all datasets in this group */
   measures: Measure[];
-  /** Physical tables, each declaring which subset of fields it has */
-  tables: GroupTable[];
+  /** Physical datasets, each declaring which subset of fields it has */
+  datasets: GroupDataset[];
 }
 
 /**
- * A physical table within a table group.
+ * A physical dataset within a dataset group.
  * 
- * Each table declares which dimensions/attributes and measures it supports,
- * enabling automatic table selection (aggregate awareness).
+ * Each dataset declares which dimensions/attributes and measures it supports,
+ * enabling automatic dataset selection (aggregate awareness).
  */
-export interface GroupTable {
-  /** Physical table name (e.g., "warehouse.orderfact") */
-  table: string;
-  /** Unique identifier for this table (e.g., Iceberg table UUID) */
+export interface GroupDataset {
+  /** Physical dataset name (e.g., "warehouse.orderfact") */
+  dataset: string;
+  /** Unique identifier for this dataset (e.g., Iceberg table UUID) */
   uuid?: string;
   /** Custom key-value properties (e.g., connectorType, sourceSystem) */
   properties?: Record<string, string>;
   /** Column definitions - optional, used for explicit schema documentation */
   columns?: Column[];
   /** 
-   * Dimension attributes available on this table.
+   * Dimension attributes available on this dataset.
    * Map from dimension name to list of attribute names.
    */
   dimensions: Record<string, string[]>;
-  /** Measure names available on this table (references group-level measures) */
+  /** Measure names available on this dataset (references group-level measures) */
   measures: string[];
   /** 
-   * Row filter for partitioned tables.
-   * e.g., { "dates.year": 2023 } means this table only contains 2023 data
+   * Row filter for partitioned datasets.
+   * e.g., { "dates.year": 2023 } means this dataset only contains 2023 data
    */
   rowFilter?: Record<string, unknown>;
 }
@@ -475,22 +470,22 @@ export interface DataFilter {
 /**
  * Semantic model definition - the queryable business entity.
  * 
- * Contains one or more table groups that share dimension and measure definitions.
- * The selector picks the optimal table based on query requirements.
+ * Contains one or more dataset groups that share dimension and measure definitions.
+ * The selector picks the optimal dataset based on query requirements.
  * 
  * Model-level dimensions are queryable with 2-part paths (dimension.attribute)
- * across all tableGroups that reference them.
+ * across all datasetGroups that reference them.
  */
 export interface SemanticModel {
   /** Model identifier */
   name: string;
   /** Namespace for the model (e.g., organization or project identifier) */
   namespace?: string;
-  /** Model-level dimensions - queryable with 2-part paths across all tableGroups */
+  /** Model-level dimensions - queryable with 2-part paths across all datasetGroups */
   dimensions?: Dimension[];
-  /** Table groups - each group contains tables that share field definitions */
-  tableGroups: TableGroup[];
-  /** Metric definitions - derived calculations from measures (model-level, shared across table groups) */
+  /** Dataset groups - each group contains datasets that share field definitions */
+  datasetGroups: DatasetGroup[];
+  /** Metric definitions - derived calculations from measures (model-level, shared across dataset groups) */
   metrics?: Metric[];
   /** Row-level security filters */
   dataFilter?: DataFilter[];
@@ -523,16 +518,16 @@ export interface Schema {
  * // Filter to just conformed dimensions
  * const conformed = attrs.filter(a => a.isConformed);
  * 
- * // Filter to just a specific tableGroup
- * const adwords = attrs.filter(a => a.tableGroup === 'adwords');
+ * // Filter to just a specific datasetGroup
+ * const adwords = attrs.filter(a => a.datasetGroup === 'adwords');
  * 
  * // Use the key for queries
  * const request = { dimensions: [attrs[0].key], metrics: ['revenue'] };
  * ```
  */
 export interface DimensionAttributeInfo {
-  /** TableGroup name, or null for conformed/virtual dimensions */
-  tableGroup: string | null;
+  /** DatasetGroup name, or null for conformed/virtual dimensions */
+  datasetGroup: string | null;
   /** Dimension name */
   dimension: string;
   /** Attribute name */
@@ -540,10 +535,10 @@ export interface DimensionAttributeInfo {
   /** 
    * Query key to use in requests.
    * - Two-part for conformed/virtual: "dimension.attribute"
-   * - Three-part for qualified: "tableGroup.dimension.attribute"
+   * - Three-part for qualified: "datasetGroup.dimension.attribute"
    */
   key: string;
-  /** True if this key produces a cross-tableGroup UNION query */
+  /** True if this key produces a cross-datasetGroup UNION query */
   isConformed: boolean;
   /** True if this is a virtual dimension (like _table) */
   isVirtual: boolean;
