@@ -7,13 +7,13 @@
  *
  * @example
  * ```typescript
- * import type { Schema, Model, TableGroup, Measure } from 'semstrait';
+ * import type { Schema, SemanticModel, TableGroup, Measure } from 'semstrait';
  *
  * // Fetch schema from your API
  * const schema: Schema = await fetch('/api/schema').then(r => r.json());
  *
- * // Navigate the model structure
- * const model = schema.models[0];
+ * // Navigate the semantic model structure
+ * const model = schema.semantic_models[0];
  * const tableGroup = model.tableGroups[0];
  *
  * // Access measures from table groups
@@ -76,9 +76,9 @@ export type {
   GroupTable,
   Column,
 
-  // Model & Schema
+  // SemanticModel & Schema
   DataFilter,
-  Model,
+  SemanticModel,
   Schema,
 
   // Utility Types

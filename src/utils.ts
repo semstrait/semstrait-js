@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import type { Schema, QueryRequest, Model, TableGroupDimension, Dimension, Attribute, AttributeRef, DimensionAttributeInfo } from './types';
+import type { Schema, QueryRequest, SemanticModel, TableGroupDimension, Dimension, Attribute, AttributeRef, DimensionAttributeInfo } from './types';
 
 export class RawDataRow {
   [key: string]: string | (null | number);
@@ -30,7 +30,7 @@ export function pivot(
   query: QueryRequest
 ): RowData[] {
   
-  const model = schema.models.find(m => m.name === modelName);
+  const model = schema.semantic_models.find(m => m.name === modelName);
   if (!model) {
     throw new Error(`Model '${modelName}' not found in schema`);
   }
@@ -137,7 +137,7 @@ export function pivot(
 }
 
 
-function getAttributeRef(dimAtt: string, model: Model): AttributeRef {
+function getAttributeRef(dimAtt: string, model: SemanticModel): AttributeRef {
   const parts = dimAtt.split('.');
   
   // Handle three-part path: tableGroup.dimension.attribute
@@ -467,7 +467,7 @@ export function isQualifiedPath(path: string): boolean {
  * isConformed(model, '_table', 'name');   // true (_table is model-level virtual)
  * ```
  */
-export function isConformed(model: Model, dimName: string, _attrName: string): boolean {
+export function isConformed(model: SemanticModel, dimName: string, _attrName: string): boolean {
   const modelDimensions = model.dimensions || [];
   return modelDimensions.some(d => d.name === dimName);
 }
@@ -479,7 +479,7 @@ export function isConformed(model: Model, dimName: string, _attrName: string): b
  * @param dimName - The dimension name
  * @returns true if the dimension is virtual
  */
-export function isVirtualDimension(model: Model, dimName: string): boolean {
+export function isVirtualDimension(model: SemanticModel, dimName: string): boolean {
   const dimension = model.dimensions?.find(d => d.name === dimName);
   return dimension?.virtual === true;
 }
@@ -506,7 +506,7 @@ export function isVirtualDimension(model: Model, dimName: string): boolean {
  * isConformedQuery(model, ['adwords.campaign.name']);            // false (tableGroup-qualified)
  * ```
  */
-export function isConformedQuery(model: Model, dimensionAttrs: string[]): boolean {
+export function isConformedQuery(model: SemanticModel, dimensionAttrs: string[]): boolean {
   if (dimensionAttrs.length === 0) {
     return false;
   }
@@ -565,7 +565,7 @@ export function isConformedQuery(model: Model, dimensionAttrs: string[]): boolea
  * const byDimension = Object.groupBy(attrs, a => a.dimension);
  * ```
  */
-export function getAllDimensionAttributes(model: Model): DimensionAttributeInfo[] {
+export function getAllDimensionAttributes(model: SemanticModel): DimensionAttributeInfo[] {
   const results: DimensionAttributeInfo[] = [];
   const topLevelDimensions = model.dimensions || [];
   

@@ -37,8 +37,8 @@ semstrait sits between raw data and the UI. It doesn't fetch data — the applic
 
 The type system mirrors the Rust semstrait crate:
 
-- **Schema** — Root container with models and dimension definitions
-- **Model** — Queryable business entity with tableGroups and metrics
+- **Schema** — Root container with semantic_models and dimension definitions
+- **SemanticModel** — Queryable business entity with tableGroups and metrics
 - **TableGroup** — Group of tables sharing dimension/measure definitions (aggregate awareness)
 - **GroupTable** — Physical table declaring which subset of fields it has
 - **TableGroupDimension** — Dimension reference within a table group (joined or degenerate)

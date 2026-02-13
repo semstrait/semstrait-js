@@ -1,7 +1,7 @@
 /**
  * TypeScript type definitions for semstrait semantic models.
  * 
- * These types mirror the Rust `model/` types in the semstrait crate.
+ * These types mirror the Rust `semantic_model/` types in the semstrait crate.
  * The JSON serialization from Rust (via serde) matches these interfaces.
  * 
  * @packageDocumentation
@@ -473,7 +473,7 @@ export interface DataFilter {
 }
 
 /**
- * Model definition - the queryable business entity.
+ * Semantic model definition - the queryable business entity.
  * 
  * Contains one or more table groups that share dimension and measure definitions.
  * The selector picks the optimal table based on query requirements.
@@ -481,7 +481,7 @@ export interface DataFilter {
  * Model-level dimensions are queryable with 2-part paths (dimension.attribute)
  * across all tableGroups that reference them.
  */
-export interface Model {
+export interface SemanticModel {
   /** Model identifier */
   name: string;
   /** Namespace for the model (e.g., organization or project identifier) */
@@ -499,11 +499,11 @@ export interface Model {
 /**
  * Complete semantic schema.
  * 
- * Contains all model definitions.
+ * Contains all semantic model definitions.
  */
 export interface Schema {
-  /** Model definitions */
-  models: Model[];
+  /** Semantic model definitions */
+  semantic_models: SemanticModel[];
 }
 
 // =============================================================================

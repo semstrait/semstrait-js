@@ -20,9 +20,9 @@ import type { Schema, QueryRequest, QueryFilter } from 'semstrait';
 // Fetch schema from your API (JSON matches these types)
 const schema: Schema = await fetch('/api/schema').then(r => r.json());
 
-// Access model, measures, dimensions with full type safety
-const model = schema.models[0];
-const revenue = model.measures.find(m => m.name === 'revenue');
+// Access semantic model, measures, dimensions with full type safety
+const model = schema.semantic_models[0];
+const revenue = model.tableGroups[0].measures.find(m => m.name === 'revenue');
 
 // LLM-friendly metadata
 console.log(revenue?.description);  // "Total revenue from completed orders"
@@ -67,8 +67,8 @@ const result = await fetch('/api/query', {
 
 | Type | Description |
 |------|-------------|
-| `Schema` | Complete semantic schema (models + dimensions) |
-| `Model` | Fact table with dimensions, measures, metrics |
+| `Schema` | Complete semantic schema (semantic_models + dimensions) |
+| `SemanticModel` | Queryable business entity with tableGroups and metrics |
 | `Dimension` | Shared dimension definition with attributes |
 | `DimensionRef` | Reference to dimension from a model |
 | `Attribute` | Column within a dimension |
