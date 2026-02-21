@@ -145,7 +145,7 @@ function getAttributeRef(dimAtt: string, model: SemanticModel): AttributeRef {
     const [dgName, dimName, attName] = parts;
     
     // Find the specific datasetGroup
-    const datasetGroup = model.datasetGroups.find(dg => dg.name === dgName);
+    const datasetGroup = model.dataset_groups.find(dg => dg.name === dgName);
     if (!datasetGroup) {
       throw new Error(`DatasetGroup '${dgName}' not found`);
     }
@@ -164,7 +164,7 @@ function getAttributeRef(dimAtt: string, model: SemanticModel): AttributeRef {
     const [dimName, attName] = parts;
     
     // Search all dataset groups for this dimension
-    for (const datasetGroup of model.datasetGroups) {
+    for (const datasetGroup of model.dataset_groups) {
       const dimRef = datasetGroup.dimensions.find((d: DatasetGroupDimension) => d.name === dimName);
       if (dimRef) {
         return { dimension: dimRef, attribute: attName };
@@ -452,7 +452,7 @@ export function isQualifiedPath(path: string): boolean {
 /**
  * Check if a dimension is defined at model level (can be queried with 2-part path).
  * 
- * Model-level dimensions are queryable across all datasetGroups that reference them.
+ * Model-level dimensions are queryable across all dataset groups that reference them.
  * The attrName parameter is kept for API compatibility but is not used in the check.
  * 
  * @param model - The model to check
@@ -488,7 +488,7 @@ export function isVirtualDimension(model: SemanticModel, dimName: string): boole
  * Check if all dimension.attribute pairs in a list can use the cross-datasetGroup UNION path.
  * 
  * Returns true if all dimensions are either:
- * - Virtual dimensions (like `_table`) - implicitly work across datasetGroups
+ * - Virtual dimensions (like `_table`) - implicitly work across dataset groups
  * - Model-level dimensions - defined at model.dimensions, queryable with 2-part paths
  * 
  * DatasetGroup-qualified dimensions (e.g., "adwords.campaign.name") are NOT conformed - 
@@ -537,7 +537,7 @@ export function isConformedQuery(model: SemanticModel, dimensionAttrs: string[])
 /**
  * Get all dimension attributes from a model with metadata for UI consumption.
  * 
- * Returns a flat list of all dimension attributes across all datasetGroups, plus
+ * Returns a flat list of all dimension attributes across all dataset_groups, plus
  * entries for conformed and virtual dimensions with `datasetGroup: null`.
  * 
  * Each entry includes:
@@ -574,7 +574,7 @@ export function getAllDimensionAttributes(model: SemanticModel): DimensionAttrib
   const conformedTracker = new Map<string, { added: boolean; isVirtual: boolean }>();
   
   // 1. Process each datasetGroup's dimensions
-  for (const datasetGroup of model.datasetGroups || []) {
+  for (const datasetGroup of model.dataset_groups || []) {
     for (const dimRef of datasetGroup.dimensions || []) {
       // Find top-level dimension definition (for attributes and virtual flag)
       const topLevelDim = topLevelDimensions.find(d => d.name === dimRef.name);

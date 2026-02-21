@@ -22,7 +22,7 @@ const schema: Schema = await fetch('/api/schema').then(r => r.json());
 
 // Access semantic model, measures, dimensions with full type safety
 const model = schema.semantic_models[0];
-const revenue = model.datasetGroups[0].measures.find(m => m.name === 'revenue');
+const revenue = model.dataset_groups[0].measures.find(m => m.name === 'revenue');
 
 // LLM-friendly metadata
 console.log(revenue?.description);  // "Total revenue from completed orders"

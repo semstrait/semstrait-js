@@ -14,7 +14,7 @@
  *
  * // Navigate the semantic model structure
  * const model = schema.semantic_models[0];
- * const datasetGroup = model.datasetGroups[0];
+ * const datasetGroup = model.dataset_groups[0];
  *
  * // Access measures from dataset groups
  * const revenue = datasetGroup.measures.find(m => m.name === 'revenue');
@@ -57,6 +57,11 @@ export type {
   MetricCaseWhen,
   MetricCondition,
   MetricConditionArg,
+
+  // Sources
+  Source,
+  ParquetSource,
+  IcebergSource,
 
   // Dimensions
   Attribute,

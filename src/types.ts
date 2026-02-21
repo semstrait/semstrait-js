@@ -250,12 +250,31 @@ export interface Attribute {
 
 /**
  * Data source configuration for a dataset or dimension.
+ *
+ * Discriminated union on the `type` field. Catalog resolution for Iceberg
+ * tables is the service layer's responsibility.
  */
-export interface Source {
-  /** Source type (currently only 'parquet' is supported) */
+export type Source = ParquetSource | IcebergSource;
+
+/**
+ * Parquet file source.
+ */
+export interface ParquetSource {
   type: 'parquet';
   /** Path to the data file (supports template variables) */
   path: string;
+}
+
+/**
+ * Iceberg table source.
+ *
+ * The `table` field is the Iceberg table identifier (e.g., "db.orders").
+ * Catalog connection details are managed by the service layer, not the semantic model.
+ */
+export interface IcebergSource {
+  type: 'iceberg';
+  /** Iceberg table identifier (e.g., "warehouse.orderfact") */
+  table: string;
 }
 
 /**
@@ -474,17 +493,17 @@ export interface DataFilter {
  * The selector picks the optimal dataset based on query requirements.
  * 
  * Model-level dimensions are queryable with 2-part paths (dimension.attribute)
- * across all datasetGroups that reference them.
+ * across all dataset groups that reference them.
  */
 export interface SemanticModel {
   /** Model identifier */
   name: string;
   /** Namespace for the model (e.g., organization or project identifier) */
   namespace?: string;
-  /** Model-level dimensions - queryable with 2-part paths across all datasetGroups */
+  /** Model-level dimensions - queryable with 2-part paths across all dataset groups */
   dimensions?: Dimension[];
   /** Dataset groups - each group contains datasets that share field definitions */
-  datasetGroups: DatasetGroup[];
+  dataset_groups: DatasetGroup[];
   /** Metric definitions - derived calculations from measures (model-level, shared across dataset groups) */
   metrics?: Metric[];
   /** Row-level security filters */
