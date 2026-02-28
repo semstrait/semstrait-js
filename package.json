@@ -2,8 +2,19 @@
   "name": "semstrait",
   "version": "0.0.1",
   "description": "TypeScript types and utilities for semstrait semantic models",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./arrow": {
+      "import": "./dist/arrow.js",
+      "types": "./dist/arrow.d.ts"
+    }
+  },
   "files": [
     "dist"
   ],
@@ -20,7 +31,8 @@
     "substrait",
     "metrics",
     "analytics",
-    "typescript"
+    "typescript",
+    "arrow"
   ],
   "author": "semstrait contributors",
   "license": "Apache-2.0",
@@ -29,6 +41,15 @@
   },
   "homepage": "https://github.com/semstrait/semstrait-js#readme",
   "devDependencies": {
+    "apache-arrow": "^21.1.0",
     "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "apache-arrow": ">=15.0.0"
+  },
+  "peerDependenciesMeta": {
+    "apache-arrow": {
+      "optional": true
+    }
   }
 }
