@@ -77,7 +77,7 @@ export type {
 
   // Dataset Groups
   DatasetGroup,
-  GroupDataset,
+  Dataset,
   Column,
 
   // SemanticModel & Schema

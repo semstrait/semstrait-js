@@ -435,12 +435,16 @@ export interface Column {
 export interface DatasetGroup {
   /** Dataset group identifier */
   name: string;
+  /** Display label for UIs */
+  label?: string;
+  /** Human-readable description for UIs and LLMs */
+  description?: string;
   /** Dimensions available to datasets in this group */
   dimensions: DatasetGroupDimension[];
   /** Measures shared by all datasets in this group */
   measures: Measure[];
   /** Physical datasets, each declaring which subset of fields it has */
-  datasets: GroupDataset[];
+  datasets: Dataset[];
 }
 
 /**
@@ -449,9 +453,13 @@ export interface DatasetGroup {
  * Each dataset declares which dimensions/attributes and measures it supports,
  * enabling automatic dataset selection (aggregate awareness).
  */
-export interface GroupDataset {
+export interface Dataset {
   /** Physical dataset name (e.g., "warehouse.orderfact") */
   dataset: string;
+  /** Display label for UIs */
+  label?: string;
+  /** Human-readable description for UIs and LLMs */
+  description?: string;
   /** Unique identifier for this dataset (e.g., Iceberg table UUID) */
   uuid?: string;
   /** Custom key-value properties (e.g., connectorType, sourceSystem) */
