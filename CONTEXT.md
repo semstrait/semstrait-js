@@ -40,7 +40,7 @@ The type system mirrors the Rust semstrait crate:
 - **Schema** — Root container with semantic_models and dimension definitions
 - **SemanticModel** — Queryable business entity with dataset_groups and metrics
 - **DatasetGroup** — Group of datasets sharing dimension/measure definitions (aggregate awareness)
-- **GroupDataset** — Physical dataset declaring which subset of fields it has
+- **Dataset** — Physical dataset declaring which subset of fields it has
 - **DatasetGroupDimension** — Dimension reference within a dataset group (joined or degenerate)
 - **Dimension** — Top-level dimension table definition
 - **Measure** — Aggregated value with expression and aggregation function
